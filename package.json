@@ -1,0 +1,51 @@
+{
+	"name": "ondevice-search",
+	"version": "0.1.0",
+	"description": "서버 없이 브라우저에서 완결되는 한국어 하이브리드 검색 — 리터럴·형태소·오타교정·시맨틱(가지치기 e5) 계층 융합",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": "./dist/index.js",
+		"./worker": "./dist/embed-worker.js",
+		"./src/*": "./src/*"
+	},
+	"files": [
+		"dist",
+		"src"
+	],
+	"scripts": {
+		"build": "tsc",
+		"check": "tsc --noEmit"
+	},
+	"keywords": [
+		"search",
+		"korean",
+		"semantic-search",
+		"transformers.js",
+		"wasm",
+		"on-device",
+		"typo-correction",
+		"morphological-analysis"
+	],
+	"author": "KIM ZINU (soysaucecrab)",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/soysaucecrab/ondevice-search.git"
+	},
+	"peerDependencies": {
+		"@huggingface/transformers": ">=3",
+		"garu-ko": ">=0.1"
+	},
+	"peerDependenciesMeta": {
+		"garu-ko": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@huggingface/transformers": "^3.8.0",
+		"garu-ko": "^0.5.0",
+		"typescript": "^5.9.0"
+	}
+}

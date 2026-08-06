@@ -1,0 +1,16 @@
+# 검색 인덱스 갱신(update_index.sh)에 필요한 것
+sentence-transformers
+numpy
+scipy
+gensim
+scikit-learn
+
+# 모델 어휘 가지치기(prune_model.py)에만 필요한 것
+optimum
+optimum-onnx
+onnx
+onnxruntime
+
+# 검증·시각화 보조 (선택)
+matplotlib
+playwright
