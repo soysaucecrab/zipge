@@ -97,5 +97,7 @@ form.addEventListener('submit', () => search.search(input.value));
 
 ## 라이선스
 
-MIT. 의존: [garu](https://github.com/ongjin/garu)(MIT),
+**Apache-2.0** — 재배포·파생물은 `NOTICE`의 제작자 표기
+(KIM ZINU / soysaucecrab)를 유지해야 합니다.
+의존: [garu](https://github.com/ongjin/garu)(MIT),
 transformers.js(Apache-2.0), multilingual-e5(MIT).
