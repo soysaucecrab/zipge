@@ -1,7 +1,11 @@
-# ondevice-search
+# zipge (집게)
 
 서버 없이 **브라우저에서 완결되는 한국어 하이브리드 검색엔진**.
 RAM 1GB 서버에서 실서비스로 검증된 구조를 라이브러리 + 파이프라인으로 추린 것이다.
+
+이름은 게의 **집게**에서 왔다 — 문서 더미에서 원하는 것을 집어 올린다.
+[garu](https://github.com/ongjin/garu)가 텍스트를 가루로 갈면, zipge가 집어낸다.
+**zip**은 덤이다: 모델 가지치기(118MB→37MB)와 int8 양자화로 눌러 담았다.
 
 - **리터럴 → 형태소 → 시맨틱** 계층 융합: 문자 그대로 일치가 항상 추론을 이긴다
 - **한국어 오타 교정**: 자모 편집거리 + 코퍼스 어휘 사전 ("쎄금"→"세금", "사유재솬"→"사유재산")
@@ -57,7 +61,7 @@ python pipeline/build_fallback_vectors.py   # 폴백 어휘 벡터
 ### 2. 브라우저에서 검색 (TS)
 
 ```ts
-import { SearchController } from 'ondevice-search';
+import { SearchController } from 'zipge';
 
 const search = new SearchController({
   indexBase: '/search-index',
@@ -71,7 +75,7 @@ input.addEventListener('focus', () => search.warmup()); // 미리 데우기
 form.addEventListener('submit', () => search.search(input.value));
 ```
 
-워커 파일은 번들러가 처리한다 (Vite/webpack: `new URL('ondevice-search/src/embed-worker.ts', import.meta.url)` 패턴이 라이브러리 내부에 이미 들어 있으므로 소스째 소비하는 것을 권장).
+워커 파일은 번들러가 처리한다 (Vite/webpack: `new URL('zipge/src/embed-worker.ts', import.meta.url)` 패턴이 라이브러리 내부에 이미 들어 있으므로 소스째 소비하는 것을 권장).
 
 ## 동작 원리 (요약)
 
