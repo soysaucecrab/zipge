@@ -90,7 +90,8 @@ form.addEventListener('submit', () => search.search(input.value));
 실측 성능 (785편 코퍼스, 원본 글 검색 Recall@10): 정상 0.88 / 오타 0.87 /
 띄어쓰기 오류 0.80 / 붙여쓰기 0.87.
 
-상세: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+**사용 방법 전체**: [docs/USAGE.md](docs/USAGE.md)
+아키텍처 상세: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## 왜 이렇게 만들었나
 
