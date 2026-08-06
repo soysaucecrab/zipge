@@ -1,6 +1,6 @@
 {
 	"name": "zipge",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "집게(zipge) — 서버 없이 브라우저에서 완결되는 한국어 하이브리드 검색. 리터럴·형태소·오타교정·시맨틱(37MB 가지치기 e5) 계층 융합",
 	"type": "module",
 	"main": "dist/index.js",
