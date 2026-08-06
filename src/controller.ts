@@ -1,8 +1,3 @@
-/*
-	층위 검색 흐름의 조율자. 쿼리마다 키워드 결과(T0)를 즉시 내보내고,
-	모델이 준비되면 같은 쿼리를 시맨틱 결과(T1)로 승격한다.
-	응답이 뒤늦게 도착한 옛 쿼리는 시퀀스 번호로 걸러 버린다.
-*/
 import { SearchIndex } from './core';
 import type { SearchHit } from './core';
 import type { EmbedWorkerConfig, WorkerIn, WorkerOut } from './embed-worker';
@@ -26,19 +21,8 @@ export class SearchController {
 	private idleTimer: ReturnType<typeof setTimeout> | null = null;
 	private embedCount = 0;
 
-	/*
-		WASM 힙은 줄어들지 않고 자라기만 하므로, 일정 횟수 검색마다 워커를
-		갈아끼워 누적을 리셋한다. 모델이 로컬 37MB라 재기동이 수 초면 끝나서,
-		응답을 다 내보낸 직후 백그라운드로 갈아끼우면 사용자는 거의 못 느낀다.
-	*/
 	private static RECYCLE_AFTER_EMBEDS = 10;
 
-	/*
-		모델이 떠 있는 동안 브라우저 메모리를 수백 MB 이상 붙잡는다.
-		한동안 검색이 없으면 워커째 내려서 돌려준다 — WASM 힙은 한 번 자라면
-		줄지 않으므로 dispose가 아니라 종료여야 실제로 반납된다.
-		다음 검색 때 warmup이 새 워커를 만들고 모델은 캐시에서 수 초 만에 돌아온다.
-	*/
 	private static IDLE_UNLOAD_MS = 3 * 60_000;
 
 	private armIdleUnload(): void {
@@ -59,12 +43,7 @@ export class SearchController {
 	status: ModelStatus = 'idle';
 	onResults: (emit: SearchEmit) => void = () => {};
 	onStatus: (status: ModelStatus, error?: string) => void = () => {};
-	/* "원래 문구로 검색" 요청(?exact=1)에서는 어떤 교정도 하지 않는다 */
 	allowCorrection = true;
-	/*
-		원문 그대로 모드: 추론(형태소·퍼지·시맨틱)을 전부 끄고 제목에
-		문구가 통째로 든 글만 보여준다. 모델도 로딩하지 않는다.
-	*/
 	exactMode = false;
 
 	private workerConfig?: EmbedWorkerConfig;
@@ -81,13 +60,8 @@ export class SearchController {
 		if (options?.idleUnloadMs) SearchController.IDLE_UNLOAD_MS = options.idleUnloadMs;
 	}
 
-	/* 검색창 포커스 시점에 부른다: 메타 로딩 + 워커/모델/벡터를 미리 데운다. */
 	async warmup(): Promise<void> {
 		const metaReady = this.index.loadMeta();
-		/*
-			형태소 기반 T0 준비(1.6MB WASM). 끝나는 대로 현재 쿼리를 명사 매칭으로
-			다시 평가한다 — 임베딩 모델(118MB)보다 훨씬 먼저 도착하는 중간 개선이다.
-		*/
 		this.index.prepareKeyword().then(() => {
 			const current = this.pending.get(this.seq);
 			if (current !== undefined) {
@@ -100,12 +74,6 @@ export class SearchController {
 					correctedTo: this.lastCorrection ?? undefined,
 					tags: this.matchedTags(current)
 				});
-				/*
-					분석기가 늦게 도착했지만 교정이 생겼다면(오타·띄어쓰기),
-					이미 나간 임베딩 요청은 원문 기준이다 — 교정문으로 다시 청한다.
-					새 시퀀스 번호를 받아야 원문 응답이 먼저 와서 자리를 차지해도
-					교정문 응답이 그것을 이긴다.
-				*/
 				if (this.lastCorrection && this.status !== 'error' && this.worker) {
 					const id = ++this.seq;
 					this.pending.set(id, current);
@@ -123,7 +91,6 @@ export class SearchController {
 		if (!this.worker) {
 			this.spawnWorker();
 			this.index.loadVectors().catch(() => {
-				/* 벡터를 못 받으면 시맨틱만 조용히 비활성 — T0는 살아 있다 */
 			});
 		}
 		await metaReady;
@@ -154,10 +121,6 @@ export class SearchController {
 		if (msg.type === 'status') {
 			this.status = msg.status === 'unloaded' ? 'idle' : msg.status;
 			this.onStatus(this.status, msg.error);
-			/*
-				모델이 죽었는데(락다운 모드의 WASM 차단 등) 답을 기다리는 검색이
-				있으면, 어휘 합성 임베딩으로 같은 검색을 마저 끝낸다.
-			*/
 			if (this.status === 'error') {
 				const current = this.pending.get(this.seq);
 				if (current !== undefined) {
@@ -195,14 +158,12 @@ export class SearchController {
 		});
 	}
 
-	/* 모델 없이 어휘 벡터 평균으로 시맨틱을 근사 — 실패하면 조용히 키워드만 남는다 */
 	private async composedFallback(id: number, query: string): Promise<void> {
 		const vector = await this.index.composeEmbedding(this.lastCorrection ?? query);
 		if (!vector || id !== this.seq) return;
 		this.emitSemantic(query, vector);
 	}
 
-	/* 디바운스는 호출자 몫. 호출마다 T0가 즉시, T1이 준비되는 대로 나간다. */
 	async search(query: string): Promise<void> {
 		await this.index.loadMeta();
 		const id = ++this.seq;
