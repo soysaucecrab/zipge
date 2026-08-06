@@ -80,7 +80,9 @@ cd pipeline && python build_index.py      # 검색 인덱스
 python pipeline/prune_model.py            # 내 코퍼스 기준 37MB 모델 생성
 ```
 
-문서 입력 스키마·전체 절차는 **[docs/USAGE.md](docs/USAGE.md)** 참고.
+문서 입력은 **`{id, title, content}` 3개 필드면 충분**하다 — slug·태그·
+저자·게시판 등은 전부 선택이며 있으면 그만큼 기능이 붙는다.
+전체 스키마·절차는 **[docs/USAGE.md](docs/USAGE.md)** 참고.
 
 ## 아키텍처
 

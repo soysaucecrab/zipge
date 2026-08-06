@@ -62,7 +62,7 @@ def main():
         cleaned = [clean_markdown(p) for p in raw_paras]
         cleaned = [p for p in cleaned if p]
         chunks = chunk_text("\n\n".join(cleaned)) if cleaned else [""]
-        docs.append({"id": d["id"], "slug": d["slug"], "title": d["title"], "chunks": chunks, "body_len": len(body)})
+        docs.append({"id": d["id"], "slug": d.get("slug") or d["id"], "title": d["title"], "chunks": chunks, "body_len": len(body)})
 
     texts, chunk_doc_idx = [], []
     for i, d in enumerate(docs):

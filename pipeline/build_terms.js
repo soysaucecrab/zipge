@@ -21,7 +21,7 @@ async function main() {
 
 	const docs = meta.map((m) => ({
 		t: nouns(m.title),
-		r: [...m.tags, ...m.authors.map((a) => a.name)].flatMap(nouns)
+		r: [...(m.tags ?? []), ...(m.authors ?? []).map((a) => a.name)].flatMap(nouns)
 	}));
 	garu.destroy();
 

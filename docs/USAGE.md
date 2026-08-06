@@ -34,28 +34,34 @@ pip install -r pipeline/requirements.txt   # sentence-transformers, gensim, scip
 
 ### 2-1. 입력 스키마
 
-문서를 `data/articles/*.json` (파일당 글 1편)으로 준비한다:
+문서를 `data/articles/*.json` (파일당 글 1편)으로 준비한다.
+**필수는 3개뿐이다:**
 
 ```jsonc
 {
   "id": "고유값(문자열)",
-  "slug": "url-slug",
   "title": "제목",
-  "content": "본문 — markdown 또는 평문",
-  "board": { "name": "게시판 이름", "slug": "board-slug" },  // 없으면 null
-  "category": "분류 이름 또는 null",
-  "tags": ["태그1", "태그2"],
-  "contributors": [{ "name": "저자", "slug": "author-slug", "role": "author" }],
-  "views": 123,
-  "created": "2024-01-01 00:00:00.000Z",
-  "updated": "2024-01-01 00:00:00.000Z",
-  "thumbnail": "파일명 또는 null",     // 결과 목록 썸네일 (선택)
-  "preview": "요약 문장 또는 null"     // 결과 목록 미리보기 (선택)
+  "content": "본문 — markdown 또는 평문"
 }
 ```
 
-`examples/adapters/`에 PocketBase에서 이 스키마로 뽑아내는 실전 어댑터가 있다.
-어떤 CMS든 이 스키마로만 맞추면 된다.
+이것만으로 시맨틱 검색·키워드 검색·오타 교정·관련 글(텍스트 kNN 기반)이
+전부 동작한다. 아래 선택 필드는 있으면 그만큼 기능이 풍부해진다:
+
+| 선택 필드 | 형태 | 있으면 좋아지는 것 | 기본값 |
+|---|---|---|---|
+| `slug` | `"url-slug"` | 결과 링크 경로 | `id` 사용 |
+| `board` | `{"name","slug"}` | 게시판 필터·그래프 엣지 | 없음 |
+| `category` | `"분류명"` | 분류 필터 | 없음 |
+| `tags` | `["태그"]` | 태그 검색·칩·그래프 엣지 | `[]` |
+| `contributors` | `[{"name","slug","role"}]` | 저자 표시·필터·그래프 엣지 | `[]` |
+| `created` | `"YYYY-MM-DD ..."` | 날짜 표시·정렬 | epoch |
+| `views` | 숫자 | 인기순 정렬 | `0` |
+| `thumbnail` / `preview` | 문자열 | 결과 목록 썸네일·미리보기 | 없음 |
+
+파이프라인이 결측 필드를 위 기본값으로 정규화하므로 런타임 쪽 처리는
+동일하다. `examples/adapters/`에 PocketBase에서 전체 스키마로 뽑아내는
+실전 어댑터가 있다 — 어떤 CMS든 이 형태로만 맞추면 된다.
 
 ### 2-2. 실행 순서
 

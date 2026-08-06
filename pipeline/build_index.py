@@ -38,16 +38,18 @@ def main():
     meta = []
     for aid in ids:
         d = docs[aid]
+        board = d.get("board") or {}
         meta.append({
             "id": d["id"],
-            "slug": d["slug"],
+            "slug": d.get("slug") or d["id"],
             "title": d["title"],
-            "board": (d["board"] or {}).get("slug"),
-            "boardName": (d["board"] or {}).get("name"),
+            "board": board.get("slug"),
+            "boardName": board.get("name"),
             "category": d.get("category"),
-            "tags": d["tags"],
-            "authors": [{"name": c["name"], "role": c["role"]} for c in d["contributors"]],
-            "created": d["created"][:10],
+            "tags": d.get("tags") or [],
+            "authors": [{"name": c.get("name", ""), "role": c.get("role", "author")}
+                        for c in (d.get("contributors") or [])],
+            "created": (d.get("created") or "1970-01-01")[:10],
             "thumbnail": d.get("thumbnail") or None,
             "preview": d.get("preview") or None,
             "views": d.get("views") or 0,
@@ -70,7 +72,7 @@ def main():
     Vq /= np.linalg.norm(Vq, axis=1, keepdims=True)
     rng = np.random.default_rng(0)
     overlap = []
-    for i in rng.choice(len(ids), 100, replace=False):
+    for i in rng.choice(len(ids), min(100, len(ids)), replace=False):
         t_f = set(np.argsort(-(V @ V[i]))[1:11])
         t_q = set(np.argsort(-(Vq @ Vq[i]))[1:11])
         overlap.append(len(t_f & t_q) / 10)
@@ -98,7 +100,7 @@ def main():
         res = bfs(idx[f"a:{aid}"])
         top = sorted(res.items(), key=lambda x: -x[1])[:TOP_K_RELATED]
         related[aid] = [
-            {"id": nodes[v]["id"][2:], "slug": docs[nodes[v]["id"][2:]]["slug"], "score": round(s, 4)}
+            {"id": nodes[v]["id"][2:], "slug": docs[nodes[v]["id"][2:]].get("slug") or nodes[v]["id"][2:], "score": round(s, 4)}
             for v, s in top
         ]
     (OUT / "related.json").write_text(json.dumps(related, ensure_ascii=False), encoding="utf-8")
@@ -107,7 +109,7 @@ def main():
     related_links = {
         aid: [{
             "id": r["id"], "slug": r["slug"], "title": docs[r["id"]]["title"],
-            "boardSlug": (docs[r["id"]]["board"] or {}).get("slug"), "score": r["score"],
+            "boardSlug": (docs[r["id"]].get("board") or {}).get("slug"), "score": r["score"],
         } for r in items]
         for aid, items in related.items()
     }

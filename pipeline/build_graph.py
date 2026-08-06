@@ -30,7 +30,7 @@ def main():
     for f in sorted(ARTICLES.glob("*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
         docs[d["id"]] = d
-    by_slug = {d["slug"]: i for i, d in docs.items() if d["slug"]}
+    by_slug = {d.get("slug"): i for i, d in docs.items() if d.get("slug")}
 
     nodes, edges = {}, []
 
@@ -46,17 +46,17 @@ def main():
     # --- attribute edges ---
     for aid, d in docs.items():
         a = f"a:{aid}"
-        for c in d["contributors"]:
-            nid = f"author:{c['slug'] or c['name']}"
-            add_node(nid, "author", c["name"])
+        for c in d.get("contributors") or []:
+            nid = f"author:{c.get('slug') or c.get('name', '')}"
+            add_node(nid, "author", c.get("name", ""))
             add_edge(a, nid, "authored_by")
-        for t in d["tags"]:
+        for t in d.get("tags") or []:
             add_node(f"tag:{t}", "tag", t)
             add_edge(a, f"tag:{t}", "tagged")
-        if d["category"]:
+        if d.get("category"):
             add_node(f"cat:{d['category']}", "category", d["category"])
             add_edge(a, f"cat:{d['category']}", "in_category")
-        if d["board"]:
+        if d.get("board"):
             add_node(f"board:{d['board']['slug']}", "board", d["board"]["name"])
             add_edge(a, f"board:{d['board']['slug']}", "in_board")
 
@@ -67,9 +67,11 @@ def main():
         conn = sqlite3.connect(db_path)
         series_rows = [(sid, name, json.loads(arts or "[]"))
                        for sid, name, arts in conn.execute("SELECT id, name, articles FROM series")]
-    else:
-        series_rows = [(s["id"], s["name"], s.get("articles", []))
+    elif series_path.exists():
+        series_rows = [(s["id"], s.get("name"), s.get("articles", []))
                        for s in json.loads(series_path.read_text(encoding="utf-8"))]
+    else:
+        series_rows = []  # 시리즈는 선택 사항
     for sid, name, members_raw in series_rows:
         members = [x for x in members_raw if x in docs]
         if len(members) >= 2:
