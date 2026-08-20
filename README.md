@@ -4,11 +4,13 @@
 [![npm downloads](https://img.shields.io/npm/dm/zipge.svg)](https://www.npmjs.com/package/zipge)
 [![GitHub stars](https://img.shields.io/github/stars/soysaucecrab/zipge.svg?style=social)](https://github.com/soysaucecrab/zipge)
 
-**서버 연산 0으로 브라우저에서 완결되는 한국어 하이브리드 검색엔진 (시맨틱 모델 37MB).**
+**정적 사이트에 AI 검색을 붙여주는 엔진.**
 
-정적 호스팅만 있으면 시맨틱 검색·형태소 매칭·오타 교정이 전부 사용자
-브라우저 안에서 동작합니다. RAM 756MB 서버에서 실서비스로 검증된
-구조를 라이브러리로 추린 것입니다.
+방문자가 키워드가 아니라 **의미로** 자료를 찾게 됩니다 — 조사·어미
+변형 때문에 키워드 매칭이 잘 깨지는 한국어에서도. 시맨틱 검색·형태소
+매칭·오타 교정이 전부 사용자 브라우저 안에서 동작하고(모델 37MB),
+서버는 정적 파일만 전송하므로 서버·API 비용이 0입니다. RAM 756MB
+서버에서 실서비스로 검증된 구조를 라이브러리로 추린 것입니다.
 
 - **계층 융합 검색** — 리터럴 → 형태소 → 시맨틱 순으로 서열화. 문자
   그대로 일치가 항상 추론을 이깁니다
