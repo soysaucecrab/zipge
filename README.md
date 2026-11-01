@@ -47,7 +47,7 @@ int8 양자화로 눌러 담았습니다.
 
 ```bash
 npm install zipge
-npm install garu-ko   # 선택 — 형태소 매칭·오타 교정 품질 향상 (권장)
+npm install garu-ko   # 선택 — 형태소 매칭·오타 교정 품질 향상 (권장, 번들러를 쓰면 필수)
 ```
 
 ```ts
@@ -75,8 +75,9 @@ form.addEventListener('submit', () => search.search(input.value));
 
 ```bash
 pip install -r pipeline/requirements.txt
+npm install                               # 학생 파이프라인의 형태소 분석(garu-ko)
 python pipeline/embed_articles.py small   # 문서 임베딩
-cd pipeline && python build_index.py      # 검색 인덱스
+(cd pipeline && python build_index.py)    # 검색 인덱스
 bash pipeline/student/run.sh              # 학생 인코더 증류 (bge-m3 교사, GPU 권장)
 ```
 
@@ -105,7 +106,7 @@ bash pipeline/student/run.sh              # 학생 인코더 증류 (bge-m3 교�
 
 ## 규모 한계
 
-브라우저가 받는 것은 원문이 아니라 쿼리 인코더(~6MB)와 글당 벡터(1KB)+
+브라우저가 받는 것은 원문이 아니라 쿼리 인코더(~5MB)와 글당 벡터(1KB)+
 메타(~0.5KB)입니다. 아래 다운로드는 인코더를 뺀 인덱스 기준입니다.
 
 | 글 수 | 첫 검색 다운로드 | 검색 지연 | 판정 |
@@ -131,7 +132,7 @@ new SearchController(options?: {
 
 controller.search(query)              // 결과는 onResults로 여러 번 도착
 controller.warmup()                   // 미리 로딩 (검색창 포커스 권장)
-controller.destroy()                  // 타이머·캐시 해제
+controller.destroy()                  // 진행 중인 결과 전달 중단
 controller.exactMode = true           // 추론 전부 끔 (리터럴만)
 controller.allowCorrection = false    // 오타 교정만 끔
 
@@ -146,8 +147,8 @@ import { SearchIndex, extractTerms, studentTokens, termsMatch, toJamo } from 'zi
 일어납니다. 실서비스는 RAM 756MB(가용 ~100MB) 서버에서 돌고 있습니다.
 
 **Q. 사용자가 받는 용량은?**
-검색을 처음 실행할 때 인코더 ~6MB + 인덱스 ~1.5MB(800편 기준)이고,
-코퍼스에 없는 단어가 나오면 단어당 ~230KB를 더 받습니다. 브라우저
+검색을 처음 실행할 때 학생 자산 ~6MB(문서 벡터 포함) + 문서 메타 ~0.4MB
+(800편 기준)이고, 코퍼스에 없는 단어가 나오면 단어당 ~230KB를 더 받습니다. 브라우저
 캐시로 이후 방문은 0. 검색을 안 쓰면 아무것도 받지 않습니다.
 
 **Q. 정말 모델이 없나요?**
