@@ -1,7 +1,5 @@
 
-import { extractTerms, loadAnalyzer, termsMatch } from './korean';
-
-export const EMBED_DIM = 384; // multilingual-e5-small
+import { extractTerms, loadAnalyzer, studentTokens, termsMatch } from './korean';
 
 export type SearchHit = {
 	id: string;
@@ -22,13 +20,55 @@ export type SearchHit = {
 
 type DocMeta = Omit<SearchHit, 'score' | 'source'>;
 
+// Student encoder assets, layout in docs/STUDENT.md
+type StudentAssets = {
+	index: Map<string, number>;
+	dim: number;
+	outDim: number;
+	members: number;
+	maxSlots: number;
+	fbMinLen: number;
+	fbMinRatio: number;
+	vocab: Int8Array; // [V][dim]
+	proj: Int8Array; // [members][outDim][dim]
+	termScale: Float32Array[]; // per member [V]
+	projScale: Float32Array[]; // per member [outDim]
+	projBias: Float32Array[]; // per member [outDim]
+	fbWeight: number[];
+	extWeight: number[]; // 0 = no usable extension lexicon
+	docs: Int8Array; // [N][outDim]
+	docScales: Float32Array;
+	docRow: Int32Array; // student doc row -> doc_meta row, -1 when absent
+	lex: { packs: string[]; index: [number, number, number][] } | null; // per shard [pack, start, length]
+};
+
+type LexShard = { index: Map<string, number>; q: Int8Array; scales: Float32Array };
+
+export type StudentEncoding = { vector: Float32Array; core: number; lexicon: number; fallback: number };
+
+// FNV-1a 32-bit over UTF-16 code units (pipeline/student/common.py fnv1a_utf16)
+function fnv1a(s: string): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h >>> 0;
+}
+
+const okJson = (r: Response) => {
+	if (!r.ok) throw new Error(`${r.status} ${r.url}`);
+	return r.json();
+};
+const okBuf = (r: Response) => {
+	if (!r.ok) throw new Error(`${r.status} ${r.url}`);
+	return r.arrayBuffer();
+};
+
 export class SearchIndex {
 	private base: string;
 	private meta: DocMeta[] | null = null;
-	private vectors: Int8Array | null = null;
-	private scales: Float32Array | null = null;
 	private metaLoading: Promise<void> | null = null;
-	private vectorsLoading: Promise<void> | null = null;
 
 	constructor(base = '/search-index') {
 		this.base = base;
@@ -58,18 +98,6 @@ export class SearchIndex {
 			.sort((a, b) => b.score - a.score || b.count - a.count)
 			.slice(0, k)
 			.map(({ name, count }) => ({ name, count }));
-	}
-
-	loadVectors(): Promise<void> {
-		this.vectorsLoading ??= Promise.all([
-			fetch(`${this.base}/doc_vectors_i8.bin`).then((r) => r.arrayBuffer()),
-			fetch(`${this.base}/vector_scales.json`).then((r) => r.json())
-		]).then(([buf, sc]) => {
-			if (sc.dim !== EMBED_DIM) throw new Error(`index dim ${sc.dim} != ${EMBED_DIM}`);
-			this.vectors = new Int8Array(buf);
-			this.scales = new Float32Array(sc.scales);
-		});
-		return this.vectorsLoading;
 	}
 
 	private docTerms: { title: string[]; rest: string[] }[] | null = null;
@@ -167,53 +195,6 @@ export class SearchIndex {
 
 	lastCorrection: string | null = null;
 
-	private vocabVecs: {
-		index: Map<string, number>;
-		data: Int8Array;
-		scales: Float32Array;
-		dim: number;
-	} | null = null;
-	private vocabVecsLoading: Promise<boolean> | null = null;
-
-	loadVocabVectors(): Promise<boolean> {
-		this.vocabVecsLoading ??= Promise.all([
-			fetch(`${this.base}/vocab_meta.json`).then((r) => r.json()),
-			fetch(`${this.base}/vocab_vectors_i8.bin`).then((r) => r.arrayBuffer())
-		])
-			.then(([m, buf]) => {
-				this.vocabVecs = {
-					index: new Map((m.terms as string[]).map((t, i) => [t, i])),
-					data: new Int8Array(buf),
-					scales: new Float32Array(m.scales),
-					dim: m.dim
-				};
-				return true;
-			})
-			.catch(() => false);
-		return this.vocabVecsLoading;
-	}
-
-	async composeEmbedding(text: string): Promise<Float32Array | null> {
-		if (!(await this.loadVocabVectors()) || !this.vocabVecs) return null;
-		const { index, data, scales, dim } = this.vocabVecs;
-		const terms = [...new Set([...extractTerms(text), text.replace(/\s+/g, '').toLowerCase()])];
-		const acc = new Float32Array(dim);
-		let found = 0;
-		for (const term of terms) {
-			const i = index.get(term);
-			if (i === undefined) continue;
-			const off = i * dim;
-			for (let d = 0; d < dim; d++) acc[d] += data[off + d] * scales[i];
-			found += 1;
-		}
-		if (found === 0) return null;
-		let norm = 0;
-		for (let d = 0; d < dim; d++) norm += acc[d] * acc[d];
-		norm = Math.sqrt(norm) || 1;
-		for (let d = 0; d < dim; d++) acc[d] /= norm;
-		return acc;
-	}
-
 	keywordSearch(query: string, k = 20): SearchHit[] {
 		this.lastCorrection = null;
 		if (!this.meta) return [];
@@ -299,19 +280,230 @@ export class SearchIndex {
 		return { results, led: distrustSemantic ? 'keyword' : 'semantic' };
 	}
 
-	semanticSearch(qvec: Float32Array, k = 20): SearchHit[] {
-		if (!this.meta || !this.vectors || !this.scales) return [];
-		const n = this.scales.length;
-		const scores = new Float32Array(n);
-		for (let i = 0; i < n; i++) {
-			let dot = 0;
-			const off = i * EMBED_DIM;
-			for (let d = 0; d < EMBED_DIM; d++) dot += this.vectors[off + d] * qvec[d];
-			scores[i] = dot * this.scales[i];
+	private student: StudentAssets | null = null;
+	private studentLoading: Promise<boolean> | null = null;
+	private lexShards = new Map<number, Promise<LexShard | null>>();
+
+	// false when the index ships no student assets (or they are inconsistent)
+	loadStudent(): Promise<boolean> {
+		this.studentLoading ??= Promise.all([
+			fetch(`${this.base}/student_meta.json`).then(okJson),
+			this.loadMeta()
+		])
+			.then(([m]) =>
+				Promise.all([
+					m,
+					fetch(`${this.base}/student_vocab_i8.bin`).then(okBuf),
+					fetch(`${this.base}/student_proj_i8.bin`).then(okBuf),
+					fetch(`${this.base}/student_params_f32.bin`).then(okBuf),
+					fetch(`${this.base}/student_doc_vectors_i8.bin`).then(okBuf),
+					fetch(`${this.base}/student_doc_scales.json`).then(okJson),
+					fetch(`${this.base}/student_lex_meta.json`)
+						.then(okJson)
+						.catch(() => null)
+				])
+			)
+			.then(([m, vocab, proj, params, docs, ds, lexMeta]) => {
+				const V: number = m.vocab_size;
+				const dim: number = m.dim;
+				const out: number = m.out_dim;
+				const M: number = m.members;
+				const N: number = m.doc_ids.length;
+				const tail = (m.version ?? 1) >= 2 ? 2 : 1; // v2 appends ext_weight
+				const block = V + 2 * out + tail;
+				if (
+					m.terms.length !== V ||
+					vocab.byteLength !== V * dim ||
+					proj.byteLength !== M * out * dim ||
+					params.byteLength !== M * block * 4 ||
+					docs.byteLength !== N * out ||
+					ds.scales.length !== N
+				)
+					throw new Error('student asset size mismatch');
+				const p = new Float32Array(params);
+				const metaRow = new Map(this.meta!.map((d, i) => [String(d.id), i]));
+				const members = [...Array(M).keys()];
+				this.student = {
+					index: new Map((m.terms as string[]).map((t, i) => [t, i])),
+					dim,
+					outDim: out,
+					members: M,
+					maxSlots: m.max_slots ?? 16,
+					fbMinLen: m.fallback?.min_len ?? 3,
+					fbMinRatio: m.fallback?.min_ratio ?? 0.5,
+					vocab: new Int8Array(vocab),
+					proj: new Int8Array(proj),
+					termScale: members.map((k) => p.subarray(k * block, k * block + V)),
+					projScale: members.map((k) => p.subarray(k * block + V, k * block + V + out)),
+					projBias: members.map((k) => p.subarray(k * block + V + out, k * block + V + 2 * out)),
+					fbWeight: members.map((k) => p[k * block + V + 2 * out]),
+					extWeight: members.map((k) => (tail === 2 ? p[k * block + V + 2 * out + 1] : 0)),
+					docs: new Int8Array(docs),
+					docScales: new Float32Array(ds.scales),
+					docRow: Int32Array.from(m.doc_ids as string[], (id) => metaRow.get(String(id)) ?? -1),
+					// lexicon vectors live in the input basis the student was trained on
+					lex:
+						tail === 2 &&
+						lexMeta?.packs &&
+						m.basis_sha1 &&
+						lexMeta.basis_sha1 === m.basis_sha1 &&
+						lexMeta.dim === dim
+							? { packs: lexMeta.packs, index: lexMeta.index }
+							: null
+				};
+				return true;
+			})
+			.catch(() => false);
+		return this.studentLoading;
+	}
+
+	// One lexicon shard = a byte range of a pack file; a server that ignores Range sends the whole pack
+	private lexShard(term: string): Promise<LexShard | null> {
+		const s = this.student!;
+		const lex = s.lex!;
+		const id = fnv1a(term) % lex.index.length;
+		let shard = this.lexShards.get(id);
+		if (!shard) {
+			const [pack, start, length] = lex.index[id];
+			shard = fetch(`${this.base}/${lex.packs[pack]}`, {
+				headers: { Range: `bytes=${start}-${start + length - 1}` }
+			})
+				.then(async (r) => {
+					const buf = await okBuf(r);
+					return r.status === 206 ? buf : buf.slice(start, start + length);
+				})
+				.then((buf) => {
+					const dv = new DataView(buf);
+					const count = dv.getUint32(0, true);
+					const jsonLen = dv.getUint32(4, true);
+					const head = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jsonLen)));
+					return {
+						index: new Map((head.terms as string[]).map((t, i) => [t, i])),
+						q: new Int8Array(buf, 8 + jsonLen, count * s.dim),
+						scales: new Float32Array(head.scales)
+					};
+				})
+				.catch(() => null);
+			this.lexShards.set(id, shard);
 		}
-		return [...scores.keys()]
-			.sort((a, b) => scores[b] - scores[a])
+		return shard;
+	}
+
+	// Longest in-vocabulary substring of an unknown noun, leftmost on ties
+	private studentFallback(t: string): number | undefined {
+		const { index, fbMinRatio } = this.student!;
+		for (let L = t.length - 1; L >= 2 && L / t.length >= fbMinRatio; L--) {
+			for (let i = 0; i + L <= t.length; i++) {
+				const row = index.get(t.slice(i, i + L));
+				if (row !== undefined) return row;
+			}
+		}
+		return undefined;
+	}
+
+	// Query vector in the teacher space; null when no token maps to anything.
+	// Slot counts (core exact / lexicon exact / substring fallback) feed the relevance gate.
+	async studentQuery(text: string): Promise<StudentEncoding | null> {
+		const s = this.student;
+		if (!s) return null;
+		const toks = studentTokens(text);
+		const shards = new Map<string, LexShard | null>();
+		if (s.lex) {
+			const miss = toks.filter(({ t }) => !s.index.has(t)).map(({ t }) => t);
+			await Promise.all(miss.map(async (t) => shards.set(t, await this.lexShard(t))));
+		}
+		type Slot =
+			| { key: string; row: number; fb: boolean }
+			| { key: string; q: Int8Array; off: number; scale: number };
+		const slots: Slot[] = [];
+		const used = new Set<string>();
+		let core = 0;
+		let lexicon = 0;
+		let fallback = 0;
+		for (const { t, kind } of toks) {
+			if (slots.length >= s.maxSlots) break;
+			let slot: Slot | null = null;
+			const row = s.index.get(t);
+			if (row !== undefined) {
+				slot = { key: `c${row}`, row, fb: false };
+			} else {
+				const sh = shards.get(t);
+				const lr = sh?.index.get(t);
+				if (sh && lr !== undefined) {
+					slot = { key: `x${t}`, q: sh.q, off: lr * s.dim, scale: sh.scales[lr] };
+				} else if (kind === 'n' && t.length >= s.fbMinLen) {
+					const fr = this.studentFallback(t);
+					if (fr !== undefined) slot = { key: `c${fr}`, row: fr, fb: true };
+				}
+			}
+			if (!slot || used.has(slot.key)) continue;
+			used.add(slot.key);
+			slots.push(slot);
+			if ('q' in slot) lexicon++;
+			else if (slot.fb) fallback++;
+			else core++;
+		}
+		if (slots.length === 0) return null;
+		const { dim, outDim } = s;
+		const pooled = new Float32Array(dim);
+		const member = new Float32Array(outDim);
+		const q = new Float32Array(outDim);
+		for (let m = 0; m < s.members; m++) {
+			pooled.fill(0);
+			for (const slot of slots) {
+				let src: Int8Array;
+				let off: number;
+				let w: number;
+				if ('q' in slot) {
+					src = slot.q;
+					off = slot.off;
+					w = slot.scale * s.extWeight[m];
+				} else {
+					src = s.vocab;
+					off = slot.row * dim;
+					w = s.termScale[m][slot.row] * (slot.fb ? s.fbWeight[m] : 1);
+				}
+				for (let d = 0; d < dim; d++) pooled[d] += src[off + d] * w;
+			}
+			const base = m * outDim * dim;
+			let norm = 0;
+			for (let o = 0; o < outDim; o++) {
+				let acc = 0;
+				const off = base + o * dim;
+				for (let d = 0; d < dim; d++) acc += s.proj[off + d] * pooled[d];
+				const v = s.projScale[m][o] * acc + s.projBias[m][o];
+				member[o] = v;
+				norm += v * v;
+			}
+			norm = Math.sqrt(norm) || 1;
+			for (let o = 0; o < outDim; o++) q[o] += member[o] / norm;
+		}
+		let norm = 0;
+		for (let o = 0; o < outDim; o++) norm += q[o] * q[o];
+		norm = Math.sqrt(norm) || 1;
+		for (let o = 0; o < outDim; o++) q[o] /= norm;
+		return { vector: q, core, lexicon, fallback };
+	}
+
+	studentSearch(qvec: Float32Array, k = 20): SearchHit[] {
+		const s = this.student;
+		const meta = this.meta;
+		if (!s || !meta) return [];
+		const rows: number[] = [];
+		const vals: number[] = [];
+		for (let i = 0; i < s.docRow.length; i++) {
+			const r = s.docRow[i];
+			if (r < 0) continue;
+			let dot = 0;
+			const off = i * s.outDim;
+			for (let o = 0; o < s.outDim; o++) dot += s.docs[off + o] * qvec[o];
+			rows.push(r);
+			vals.push(dot * s.docScales[i]);
+		}
+		return vals
+			.map((_, j) => j)
+			.sort((a, b) => vals[b] - vals[a])
 			.slice(0, k)
-			.map((i) => ({ ...this.meta![i], score: scores[i], source: 'semantic' as const }));
+			.map((j) => ({ ...meta[rows[j]], score: vals[j], source: 'semantic' as const }));
 	}
 }

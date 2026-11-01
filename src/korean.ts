@@ -36,6 +36,33 @@ export function extractTerms(text: string): string[] {
 	return cleaned.toLowerCase().split(/\s+/).filter(Boolean).map(stripParticle);
 }
 
+/*
+	Student encoder tokens (docs/STUDENT.md §토큰) — must match pipeline/student/build_queries.mjs.
+	n: garu nouns (whitespace split without garu), may use the substring fallback
+	e: each eojeol and its particle-stripped form, exact matches only
+	j: the whole query without spaces, exact matches only
+*/
+export type StudentToken = { t: string; kind: 'n' | 'e' | 'j' };
+
+export function studentTokens(text: string): StudentToken[] {
+	const cleaned = text.trim();
+	if (!cleaned) return [];
+	const lower = cleaned.toLowerCase();
+	const out: StudentToken[] = [];
+	const add = (t: string, kind: StudentToken['kind']) => {
+		if (t && !out.some((x) => x.t === t)) out.push({ t, kind });
+	};
+	const nouns = garu ? garu.nouns(cleaned, { includeSL: true }).map((n) => n.toLowerCase()) : [];
+	for (const t of nouns.length > 0 ? nouns : lower.split(/\s+/)) add(t, 'n');
+	for (const e of lower.split(/\s+/)) {
+		if (e.length < 2) continue;
+		add(e, 'e');
+		add(stripParticle(e), 'e');
+	}
+	add(lower.replace(/\s+/g, ''), 'j');
+	return out;
+}
+
 const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
 const JUNG = 'ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ';
 const JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];

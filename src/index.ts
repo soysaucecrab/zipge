@@ -1,7 +1,7 @@
-export { SearchIndex, EMBED_DIM } from './core';
-export type { SearchHit } from './core';
+export { SearchIndex } from './core';
+export type { SearchHit, StudentEncoding } from './core';
 export { SearchController } from './controller';
-export type { ModelStatus, SearchEmit } from './controller';
+export type { EncoderStatus, SearchEmit, StudentGate } from './controller';
 export {
 	extractTerms,
 	stripParticle,
@@ -9,6 +9,7 @@ export {
 	toJamo,
 	withinEditDistance,
 	hasHangul,
-	loadAnalyzer
+	loadAnalyzer,
+	studentTokens
 } from './korean';
-export type { WorkerIn, WorkerOut, EmbedWorkerConfig } from './embed-worker';
+export type { StudentToken } from './korean';

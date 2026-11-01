@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-command index refresh: DB fetch -> export -> embeddings -> graph -> index -> frontend copy.
+# One-command index refresh: DB fetch -> export -> embeddings -> graph -> index -> student encoder -> frontend copy.
 # Usage:
 #   scripts/update_index.sh            # full run (prompts for the server SSH password)
 #   SKIP_FETCH=1 scripts/update_index.sh   # reuse the existing local data/data.db
@@ -31,15 +31,17 @@ echo "==> graph layout + admin viz"
 $PY scripts/graph_layout.py
 $PY scripts/build_viz.py
 
+echo "==> student encoder (bge-m3 teacher, GPU recommended)"
+[[ -e node_modules ]] || ln -s "$FRONTEND/node_modules" node_modules   # garu-ko for the Node steps
+PYTHON=$PY bash scripts/student/run.sh
+
 echo "==> copying into frontend"
-cp data/index/doc_meta.json data/index/doc_vectors_i8.bin \
-   data/index/vector_scales.json data/index/tags.json \
+cp data/index/doc_meta.json data/index/tags.json data/index/student_* \
    "$FRONTEND/static/search-index/"
 cp data/index/related_links.json "$FRONTEND/src/lib/server/data/"
 
-echo "==> fallback assets (WASM 차단 환경용 사전·어휘 벡터)"
+echo "==> keyword fallback dictionary (WASM 차단 환경용 사전)"
 (cd "$FRONTEND" && node pipeline/build_terms.js)
-$PY "$FRONTEND/pipeline/build_fallback_vectors.py"
 
 echo "==> done. next steps:"
 echo "    1) cd $FRONTEND && git diff --stat   # review"

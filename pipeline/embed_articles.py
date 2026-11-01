@@ -20,9 +20,6 @@ MODELS = {
     "base": "intfloat/multilingual-e5-base",
     "large": "intfloat/multilingual-e5-large",
 }
-MODEL_ALIAS = sys.argv[1] if len(sys.argv) > 1 else "base"
-MODEL = MODELS[MODEL_ALIAS]
-SUFFIX = "" if MODEL_ALIAS == "base" else f"_{MODEL_ALIAS}"
 CHUNK_CHARS = 550     # ~0.45 tokens/char for Korean -> stays under e5's 512-token limit
 HARD_SPLIT_CHARS = 800
 MIN_CHUNK_CHARS = 50
@@ -53,7 +50,9 @@ def chunk_text(text: str) -> list[str]:
     return chunks
 
 
-def main():
+def main(alias: str = "base"):
+    model_id = MODELS[alias]
+    suffix = "" if alias == "base" else f"_{alias}"
     docs = []
     for f in sorted(ARTICLES.glob("*.json")):
         d = json.loads(f.read_text(encoding="utf-8"))
@@ -71,7 +70,7 @@ def main():
             chunk_doc_idx.append(i)
     print(f"{len(docs)} docs, {len(texts)} chunks")
 
-    model = SentenceTransformer(MODEL)
+    model = SentenceTransformer(model_id)
     vecs = model.encode(texts, batch_size=32, normalize_embeddings=True, show_progress_bar=True)
     vecs = np.asarray(vecs, dtype=np.float32)
 
@@ -83,12 +82,13 @@ def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     ids = np.array([d["id"] for d in docs])
-    np.savez_compressed(OUT / f"doc_embeddings{SUFFIX}.npz", ids=ids, vectors=doc_vecs)
-    np.savez_compressed(OUT / f"chunk_embeddings{SUFFIX}.npz", doc_idx=chunk_doc_idx, vectors=vecs, ids=ids)
+    np.savez_compressed(OUT / f"doc_embeddings{suffix}.npz", ids=ids, vectors=doc_vecs)
+    np.savez_compressed(OUT / f"chunk_embeddings{suffix}.npz", doc_idx=chunk_doc_idx, vectors=vecs, ids=ids)
     meta = [{"id": d["id"], "slug": d["slug"], "title": d["title"], "n_chunks": len(d["chunks"])} for d in docs]
     (OUT / "doc_meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     print(f"saved to {OUT}")
 
 
+# argv is read here (not at import) so pipeline/student/embed_teacher.py can reuse the chunking helpers
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "base")

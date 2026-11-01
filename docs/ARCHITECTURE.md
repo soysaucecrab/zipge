@@ -1,5 +1,10 @@
 # 미제스코리아 검색 시스템
 
+> **기록 문서다.** zipge가 처음 추려진 시점(브라우저에서 37MB e5-small 모델을 돌리던 구조)의 설계·실측을
+> 남긴 것이다. 그 뒤 브라우저 모델 경로(임베딩 워커, WebGPU/WASM 강등 사다리, 합성 임베딩 폴백,
+> 모델 가지치기)는 **학생 인코더**(모델 없는 쿼리 인코더, 약 6MB)로 대체되어 라이브러리에서 제거됐다.
+> 현재 사용법은 [USAGE.md](USAGE.md), 시맨틱 계층은 [STUDENT.md](STUDENT.md)를 본다.
+
 브라우저에서 완결되는 하이브리드 검색(키워드 + 형태소 + 시맨틱)과
 문서 그래프 기반 관련 글 추천. 서버(RAM 1GB)는 정적 파일만 내보내며
 검색 연산에 관여하지 않는다.
@@ -218,7 +223,7 @@ Index Refresh → **Run workflow** (또는 `gh workflow run index-refresh.yaml`)
 | `related_search.py` | node2vec 유사도 가중 BFS 빔서치 |
 | `build_index.py` | int8 문서벡터·메타·태그·관련 글 (총 ~1.9MB) |
 | `graph_layout.py` / `build_viz.py` | t-SNE 레이아웃 → 관리자 그래프 페이지 |
-| `prune_model.py` | 어휘 가지치기 ONNX (시퀀스 밖, 필요 시만) |
+| `prune_model.py` | 어휘 가지치기 ONNX (시퀀스 밖, 필요 시만) — 이후 제거됨 |
 
 node2vec은 transductive라 새 글 노드는 재학습 전까지 임베딩이 없다 —
 그래서 증분 갱신 대신 전체 재학습을 쓴다(전체 5분이라 증분 설계가 무의미).
@@ -238,9 +243,9 @@ node2vec **0.811** > PPR 0.769 > GraphSAGE 0.694(기각: 베이스라인을
 | 붙여쓰기 | 0.593 | **0.870** |
 
 e5-base는 small보다 크고 성능이 낮아 제외. e5-large(+2%p, 562MB)는
-비용 대비 이득이 없어 제외. 벤치마크 재현:
-`scripts/bench_queries.py` → `scripts/bench_t0.ts`(이 레포) →
-`scripts/bench_semantic.py`.
+비용 대비 이득이 없어 제외. 당시 벤치마크는
+`scripts/bench_queries.py` → `scripts/bench_t0.ts` → `scripts/bench_semantic.py`였다
+(`bench_semantic.py`는 모델 경로와 함께 제거됨 — 학생 인코더 평가는 `pipeline/student/evaluate.py`).
 
 ## 8. WASM 차단 환경 폴백 (락다운 모드 등)
 
@@ -256,8 +261,9 @@ e5-base는 small보다 크고 성능이 낮아 제외. e5-large(+2%p, 562MB)는
 
 한계: 합성 임베딩은 어순·문맥을 잃으므로 긴 자연어 질문에서 정밀 모델보다
 약하다. 상태 안내는 "정밀 의미 검색 모델을 쓸 수 없어 간이 검색으로
-동작합니다"로 표시된다. 폴백 자산은 `pipeline/build_terms.js`(node·garu) +
-`pipeline/build_fallback_vectors.py`가 만들고 `update_index.sh`에 포함된다.
+동작합니다"로 표시된다. 당시 폴백 자산은 `pipeline/build_terms.js`(node·garu) +
+`pipeline/build_fallback_vectors.py`가 만들었다. 지금은 학생 인코더가 순수 JS라 시맨틱 폴백이 따로 필요 없고,
+`build_fallback_vectors.py`는 제거됐다(`terms.json`을 만드는 `build_terms.js`는 그대로 쓴다).
 
 ## 9. 보류된 계획 (더 좋은 서버 확보 시)
 

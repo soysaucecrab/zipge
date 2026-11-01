@@ -12,6 +12,7 @@ rm -rf "$WORK"
 mkdir -p "$WORK/data"
 cp -r "$REPO/pipeline" "$WORK/scripts"
 ln -sfn "$REPO" "$WORK/miseskorea-frontend"
+ln -sfn "$REPO/node_modules" "$WORK/node_modules"   # 학생 인코더 Node 단계가 garu-ko를 쓴다
 cd "$WORK"
 
 echo "==> export (public API)"
@@ -29,15 +30,16 @@ echo "==> admin graph layout"
 $PYTHON scripts/graph_layout.py
 $PYTHON scripts/build_viz.py
 
+echo "==> student encoder (bge-m3 teacher, GPU recommended)"
+PYTHON=$PYTHON bash scripts/student/run.sh
+
 echo "==> copy into repo"
-cp data/index/doc_meta.json data/index/doc_vectors_i8.bin \
-   data/index/vector_scales.json data/index/tags.json \
+cp data/index/doc_meta.json data/index/tags.json data/index/student_* \
    "$REPO/static/search-index/"
 cp data/index/related_links.json "$REPO/src/lib/server/data/"
 
-echo "==> fallback assets"
+echo "==> keyword fallback dictionary (WASM-blocked browsers)"
 (cd "$REPO" && node pipeline/build_terms.js)
-$PYTHON "$REPO/pipeline/build_fallback_vectors.py"
 
 echo "==> source marker"
 $PYTHON "$REPO/pipeline/check_source.py" --write
