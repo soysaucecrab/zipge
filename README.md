@@ -131,7 +131,7 @@ new SearchController(options?: {
 
 controller.search(query)              // 결과는 onResults로 여러 번 도착
 controller.warmup()                   // 미리 로딩 (검색창 포커스 권장)
-controller.destroy()                  // 워커·타이머 해제
+controller.destroy()                  // 타이머·캐시 해제
 controller.exactMode = true           // 추론 전부 끔 (리터럴만)
 controller.allowCorrection = false    // 오타 교정만 끔
 
@@ -142,7 +142,7 @@ import { SearchIndex, extractTerms, studentTokens, termsMatch, toJamo } from 'zi
 ## FAQ
 
 **Q. 서버가 정말 아무 일도 안 하나요?**
-정적 파일 전송뿐입니다. 임베딩 추론·매칭·교정 전부 브라우저에서
+정적 파일 전송뿐입니다. 쿼리 인코딩·매칭·교정 전부 브라우저에서
 일어납니다. 실서비스는 RAM 756MB(가용 ~100MB) 서버에서 돌고 있습니다.
 
 **Q. 사용자가 받는 용량은?**
@@ -187,6 +187,5 @@ Apache-2.0 — 재배포·파생물은 [`NOTICE`](NOTICE)의 제작자 표기
 (KIM ZINU / soysaucecrab)를 유지해야 합니다.
 
 의존·감사: [garu](https://github.com/ongjin/garu) (MIT) ·
-[transformers.js](https://github.com/huggingface/transformers.js) (Apache-2.0) ·
 [multilingual-e5](https://huggingface.co/intfloat/multilingual-e5-small) (MIT) ·
 [BGE-M3](https://huggingface.co/BAAI/bge-m3) (MIT, 오프라인 증류 교사)
