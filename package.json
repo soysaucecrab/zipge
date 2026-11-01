@@ -11,11 +11,13 @@
 	},
 	"files": [
 		"dist",
-		"src"
+		"src",
+		"NOTICE"
 	],
 	"scripts": {
 		"build": "tsc",
-		"check": "tsc --noEmit"
+		"check": "tsc --noEmit",
+		"prepack": "npm run build"
 	},
 	"keywords": [
 		"zipge",
