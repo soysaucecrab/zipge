@@ -1,5 +1,5 @@
 
-import { extractTerms, loadAnalyzer, studentTokens, termsMatch } from './korean';
+import { extractTerms, loadAnalyzer, studentTokens, termsMatch } from './korean.js';
 
 export type SearchHit = {
 	id: string;

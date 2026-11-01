@@ -1,5 +1,5 @@
-import { SearchIndex } from './core';
-import type { SearchHit } from './core';
+import { SearchIndex } from './core.js';
+import type { SearchHit } from './core.js';
 
 export type EncoderStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type StudentGate = { exact: number; fallbackOnly: number };

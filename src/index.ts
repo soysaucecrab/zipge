@@ -1,7 +1,7 @@
-export { SearchIndex } from './core';
-export type { SearchHit, StudentEncoding } from './core';
-export { SearchController } from './controller';
-export type { EncoderStatus, SearchEmit, StudentGate } from './controller';
+export { SearchIndex } from './core.js';
+export type { SearchHit, StudentEncoding } from './core.js';
+export { SearchController } from './controller.js';
+export type { EncoderStatus, SearchEmit, StudentGate } from './controller.js';
 export {
 	extractTerms,
 	stripParticle,
@@ -11,5 +11,5 @@ export {
 	hasHangul,
 	loadAnalyzer,
 	studentTokens
-} from './korean';
-export type { StudentToken } from './korean';
+} from './korean.js';
+export type { StudentToken } from './korean.js';
